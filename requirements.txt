@@ -3,3 +3,5 @@ nose
 nltk
 scipy
 python-dateutil
+pyCLI
+logging
