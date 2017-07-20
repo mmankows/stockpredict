@@ -1,0 +1,5 @@
+pybrain
+nose
+nltk
+scipy
+python-dateutil
