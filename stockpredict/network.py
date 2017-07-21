@@ -1,11 +1,19 @@
+import logging
 from pybrain.structure import FeedForwardNetwork, SigmoidLayer
 from dateutil.parser import parse
 
 
+logger = logging.getLogger()
+
+
 class StockNeuralNetwork(object):
+    """
+    Neural network for stock data
+    """
 
     def __init__(self, previous=365, future=10):
         self._net = FeedForwardNetwork()
+        self.params = NetworkParams(sessions_tracked=previous, sessions_predicted=future)
 
         # Initialize input modules for each session in past - volume, open,
         for _ in range(previous):
@@ -18,14 +26,21 @@ class StockNeuralNetwork(object):
         for _ in range(future):
             self._net.addOutputModule(SigmoidLayer(2))
 
-    def train(self, sessions_data):
+    def train(self, input_sessions, output_sessions):
         """
-        
         :param sessions_data: List sessions 
         :return: 
         """
-        for session_data in sessions_data:
-            pass
+        pass
+
+
+class NetworkParams(object):
+    """
+    Storage for network parameters
+    """
+    def __init__(self, **kwargs):
+        for k, v in kwargs.items():
+            setattr(self, k, v)
 
 
 class SessionData(object):
