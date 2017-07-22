@@ -26,10 +26,11 @@ class TrainingManager(object):
         :return: 
         """
         network_params = self._network.params
-        # max_training_cycles = len(sessions_data) - network_params.sessions_tracked - network_params.sessions_predicted
-        max_training_cycles = 5
+        max_data_samples = len(sessions_data) - network_params.sessions_tracked - network_params.sessions_predicted
+        # max_training_cycles = 5
 
-        for cycle_num in range(0, max_training_cycles+1):
+        # TODO - only freshest data now
+        for cycle_num in range(0, 30):#)max_data_samples+1):
             last_tracked_idx = cycle_num+network_params.sessions_tracked
             # normalize dataset parameters
             training_vector = sessions_data[cycle_num: last_tracked_idx + network_params.sessions_predicted]
@@ -48,12 +49,22 @@ class TrainingManager(object):
         logger.debug('Total volume: {}'.format(sum(sd.volume for sd in session_data)))
         logger.debug('Volume mean: {:.2f}'.format(volume_mean))
 
+        def cap(price):
+            if price > 1:
+                logger.warn('Capped - max')
+                return 1
+            elif price < -1:
+                logger.warn('Capped - min')
+                return -1
+            else:
+                return price
+
         prev_sd = session_data[0]
         for sd in session_data:
             normalized_sd.append(SessionData(
                 timestamp=sd.timestamp,
-                volume=float(sd.volume) / float(volume_mean),
-                **{price: getattr(sd, price) - getattr(prev_sd, price) / getattr(prev_sd, price)
+                volume=cap((float(sd.volume) - float(volume_mean)) / float(volume_mean)),
+                **{price: cap((getattr(sd, price) - getattr(prev_sd, price)) / getattr(prev_sd, price))
                    for price in ['price_open', 'price_close', 'price_high', 'price_low']
                 }
             ))
@@ -99,4 +110,11 @@ class TrainingManager(object):
             logger.warn("{} rows skipped due to errors".format(error_cnt))
 
         self._network.train(self.splited_datasets(all_sessions_data))
+        # ds = None
+        # for ds in self.splited_datasets(all_sessions_data):
+        #
+        #     self._network.predict(
+        #         ds[0], ds[1]
+        #     )
+        # self._network.display()
 
