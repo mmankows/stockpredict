@@ -1,13 +1,15 @@
 from csv import reader, DictReader
 import logging
 
+from dateutil.parser import parse
+
 from stockpredict.network import SessionData
 
 
 logger = logging.getLogger()
 
 
-class NetworkTrainer(object):
+class TrainingManager(object):
     """
     Trains neural network with data
     """
@@ -18,29 +20,48 @@ class NetworkTrainer(object):
     def set_network(self, network):
         self._network = network
 
-    def train_from_sessions_data(self, sessions_data):
-        sessions_data = self.normalize_session_data(sessions_data)
+    def splited_datasets(self, sessions_data):
+        """
+        Generates training sets from training data
+        :return: 
+        """
         network_params = self._network.params
-        max_training_cycles = len(sessions_data) - network_params.sessions_tracked - network_params.sessions_predicted
+        # max_training_cycles = len(sessions_data) - network_params.sessions_tracked - network_params.sessions_predicted
+        max_training_cycles = 5
 
         for cycle_num in range(0, max_training_cycles+1):
-            logger.debug("Training cycle {}. Offset: T({}-{}), P({}-{})".format(
-                cycle_num,
-                cycle_num,
-                cycle_num+network_params.sessions_tracked+1,
-                cycle_num+network_params.sessions_tracked+1,
-                cycle_num+network_params.sessions_tracked+network_params.sessions_predicted+1
-            ))
-            self._network.train(
-                input_sessions=sessions_data[cycle_num:cycle_num+network_params.sessions_tracked+1],
-                output_sessions=sessions_data[cycle_num+network_params.sessions_tracked+1:cycle_num+network_params.sessions_tracked+network_params.sessions_predicted+1]
+            last_tracked_idx = cycle_num+network_params.sessions_tracked
+            # normalize dataset parameters
+            training_vector = sessions_data[cycle_num: last_tracked_idx + network_params.sessions_predicted]
+            training_vector = self.normalize_session_data(training_vector)
+            yield (
+                training_vector[:network_params.sessions_tracked],
+                training_vector[network_params.sessions_tracked:]
             )
 
     def normalize_session_data(self, session_data):
+        normalized_sd = []
+
+        # calculate volume mean
+        volume_mean = float(sum(sd.volume for sd in session_data)) / len(session_data)
+
+        logger.debug('Total volume: {}'.format(sum(sd.volume for sd in session_data)))
+        logger.debug('Volume mean: {:.2f}'.format(volume_mean))
+
+        prev_sd = session_data[0]
         for sd in session_data:
-            # TODO - normalize
-            pass
-        return session_data
+            normalized_sd.append(SessionData(
+                timestamp=sd.timestamp,
+                volume=float(sd.volume) / float(volume_mean),
+                **{price: getattr(sd, price) - getattr(prev_sd, price) / getattr(prev_sd, price)
+                   for price in ['price_open', 'price_close', 'price_high', 'price_low']
+                }
+            ))
+
+        for nsd in normalized_sd:
+            logger.debug("SD: TS{}\tVM{:.6f}\tPO{:.6f}\tPC{:.6f}\tPH{:.6f}\tPL{:.6f}".format(nsd.timestamp, nsd.volume, *[getattr(nsd, price) for price in ['price_open', 'price_close', 'price_high', 'price_low']]))
+
+        return normalized_sd
 
     def train_from_csv(self, csv_path, col_dict=None):
         col_dict = col_dict or {}
@@ -55,12 +76,12 @@ class NetworkTrainer(object):
 
                 try:
                     sd = SessionData(
-                        date=row[col_dict['DATE']],
-                        price_open=row[col_dict['OPEN']],
-                        price_close=row[col_dict['CLOSE']],
-                        price_low=row[col_dict['LOW']],
-                        price_high=row[col_dict['HIGH']],
-                        volume=row[col_dict['VOLUME']]
+                        timestamp=parse(row[col_dict['DATE']]),
+                        price_open=float(row[col_dict['OPEN']]),
+                        price_close=float(row[col_dict['CLOSE']]),
+                        price_low=float(row[col_dict['LOW']]),
+                        price_high=float(row[col_dict['HIGH']]),
+                        volume=int(row[col_dict['VOLUME']])
                     )
                     all_sessions_data.append(sd)
 #                    logger.debug("Row parsed: {}".format(row))
@@ -77,5 +98,5 @@ class NetworkTrainer(object):
         if error_cnt:
             logger.warn("{} rows skipped due to errors".format(error_cnt))
 
-        self.train_from_sessions_data(all_sessions_data)
+        self._network.train(self.splited_datasets(all_sessions_data))
 

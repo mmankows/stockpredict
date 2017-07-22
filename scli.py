@@ -1,7 +1,7 @@
 import cli.app
 import logging
 
-from stockpredict.training import NetworkTrainer
+from stockpredict.training import TrainingManager
 from stockpredict.network import StockNeuralNetwork
 
 logger = logging.getLogger()
@@ -16,11 +16,11 @@ def train(app):
     :return: 
     """
     # Choose Trainer
-    trainer = NetworkTrainer()
+    trainer = TrainingManager()
 
     # Choose network for or create new one
     logger.info("Setting up network.")
-    net = StockNeuralNetwork(previous=365, future=10)
+    net = StockNeuralNetwork(previous=5, future=5)
     trainer.set_network(net)
 
     # Run training
